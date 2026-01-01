@@ -1,0 +1,36 @@
+{
+  "name": "stackedge",
+  "version": "1.0.0",
+  "description": "Termux-friendly decentralized app hosting with Tor",
+  "bin": {
+    "stackedge": "bin/stackedge.js"
+  },
+  "type": "commonjs",
+  "keywords": [
+    "termux",
+    "tor",
+    "cli",
+    "hosting",
+    "node",
+    "decentralized",
+    "android"
+  ],
+  "author": "Mr_termux-r2l <hr@stackverify.site>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Frost-bit-star/stackedge.git"
+  },
+  "homepage": "https://www.youtube.com/@Mr_termux-r2l",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^5.3.0",
+    "fs-extra": "^11.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node bin/stackedge.js"
+  }
+}
