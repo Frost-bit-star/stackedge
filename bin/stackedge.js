@@ -10,13 +10,14 @@ const { restartApp } = require("../lib/commands/restart");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs-extra");
+const net = require("net");
 
 // Termux Tor binary & data directory
 const TOR_BIN = "/data/data/com.termux/files/usr/bin/tor";
 const TOR_DIR = path.join(process.env.HOME, ".tor");
 const TORRC = path.join(TOR_DIR, "torrc");
 
-// Ensure Tor config directory exists
+// Ensure Tor config exists
 async function ensureTorConfig() {
   await fs.ensureDir(TOR_DIR);
 
@@ -27,37 +28,55 @@ CookieAuthentication 1
 AvoidDiskWrites 1
 `.trim();
 
-  await fs.writeFile(TORRC, baseConfig, "utf-8");
+  if (!fs.existsSync(TORRC)) {
+    await fs.writeFile(TORRC, baseConfig, "utf-8");
+  }
 }
 
-// Start Tor in background and wait until bootstrap
-async function startTor() {
+// Start Tor fully detached
+async function startTorBackground() {
   await ensureTorConfig();
 
-  return new Promise((resolve, reject) => {
-    const tor = spawn(TOR_BIN, ["-f", TORRC], {
-      cwd: TOR_DIR,
-      detached: true,
-      stdio: ["pipe", "pipe", "pipe"]
-    });
+  const tor = spawn(TOR_BIN, ["-f", TORRC], {
+    cwd: TOR_DIR,
+    detached: true,
+    stdio: "ignore",
+  });
 
-    tor.stdout.on("data", (data) => {
-      const text = data.toString();
-      process.stdout.write(text);
+  tor.unref();
+  console.log("Tor is running in the background...");
+}
 
-      if (text.includes("Bootstrapped 100%")) {
-        resolve();
-      }
-    });
+// Detect first free TCP port between 3000–9000
+async function detectPort() {
+  for (let port = 3000; port <= 9000; port++) {
+    if (!(await isPortOpen(port))) return port;
+  }
+  return null;
+}
 
-    tor.stderr.on("data", (data) => process.stderr.write(data.toString()));
-    tor.on("error", (err) => reject(err));
-
-    tor.unref();
+function isPortOpen(port) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(200);
+    socket
+      .once("connect", () => {
+        socket.destroy();
+        resolve(true);
+      })
+      .once("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      })
+      .once("error", () => {
+        socket.destroy();
+        resolve(false);
+      })
+      .connect(port, "127.0.0.1");
   });
 }
 
-// Start command
+// START COMMAND
 program
   .command("start <name>")
   .allowUnknownOption(true)
@@ -77,43 +96,52 @@ program
       name,
       cwd,
       command: cmd,
-      port: null,
+      port: process.env.PORT || null,
       appState: "starting",
       torState: "pending",
       onion: null,
       pid: null,
-      autorestart: true
+      autorestart: true,
     };
 
-    // Start the app immediately
-    startProcess(app); // make sure startProcess updates app.pid
+    // Start the user command
+    startProcess(app);
 
-    // Detect port if your app exposes PORT env or fixed port
-    const detectedPort = process.env.PORT || 3000; // fallback if unknown
-    app.port = detectedPort;
+    // Detect port if not set
+    if (!app.port) {
+      console.log("Detecting port...");
+      const detectedPort = await detectPort();
+      if (detectedPort) {
+        app.port = detectedPort;
+        console.log(`Detected port: ${detectedPort}`);
+      } else {
+        console.log(
+          "No port detected. Set PORT env variable to expose via Tor."
+        );
+      }
+    }
 
-    // Save app info immediately
     apps.push(app);
     await saveApps(apps);
 
     console.log(`App '${name}' started in folder ${cwd}`);
-    console.log("Starting Tor in background...");
 
-    try {
-      await startTor();
+    // Start Tor in background
+    startTorBackground().catch((err) => console.error("Failed to start Tor:", err));
 
-      // Setup hidden service for this app
+    // Setup Tor hidden service if port is known
+    if (app.port) {
       const hiddenServiceDir = path.join(TOR_DIR, "hidden_service_" + app.name);
       await fs.ensureDir(hiddenServiceDir);
 
       const hiddenServiceConfig = `
 HiddenServiceDir ${hiddenServiceDir}
-HiddenServicePort ${detectedPort} 127.0.0.1:${detectedPort}
-      `.trim();
+HiddenServicePort ${app.port} 127.0.0.1:${app.port}
+`.trim();
 
       await fs.appendFile(TORRC, "\n" + hiddenServiceConfig);
 
-      // Wait for hostname file to appear
+      // Wait for hostname to appear
       const hostnameFile = path.join(hiddenServiceDir, "hostname");
       const checkHostname = setInterval(async () => {
         if (fs.existsSync(hostnameFile)) {
@@ -122,32 +150,35 @@ HiddenServicePort ${detectedPort} 127.0.0.1:${detectedPort}
 
           // Update registry
           const savedApps = await loadApps();
-          const index = savedApps.findIndex(a => a.name === app.name);
+          const index = savedApps.findIndex((a) => a.name === app.name);
           if (index !== -1) {
             savedApps[index] = app;
             await saveApps(savedApps);
           }
 
-          console.log(`Tor service for ${name} is online: ${app.onion}`);
+          console.log(`Tor service for '${name}' is online: ${app.onion}`);
           clearInterval(checkHostname);
         }
       }, 1000);
-    } catch (err) {
-      console.error("Failed to start Tor:", err);
+    } else {
+      app.torState = "error";
+      await saveApps(apps);
     }
   });
 
-// Other commands
+// OTHER COMMANDS
 program.command("stop <name>").action(stopApp);
 program.command("restart <name>").action(restartApp);
 program.command("list").action(listApps);
 program.command("resurrect").action(resurrect);
 
-// Default fallback
+// DEFAULT FALLBACK
 program.action(async () => {
   console.log("stackedge status:");
   await listApps();
-  console.log("\nCommands:\n  start <name> -- <cmd>\n  stop <name>\n  restart <name>\n  list\n  resurrect");
+  console.log(
+    "\nCommands:\n  start <name> -- <cmd>\n  stop <name>\n  restart <name>\n  list\n  resurrect"
+  );
 });
 
 program.parse(process.argv);
