@@ -182,6 +182,22 @@ Copy code
 
 ### Setup
 
+
+## 🔍 Quick Tor Onion Testing (No Tor Install Required)
+
+For quick testing of `.onion` services without installing Tor Browser or Tor locally, you can use this web-based Tor proxy:
+
+👉 **[4everproxy Tor Proxy](https://www.4everproxy.com/tor-proxy)**
+
+### Notes
+- Useful for basic availability checks
+- No local Tor setup required
+- Not recommended for privacy-critical use
+- Some onion services may not fully load due to proxy limitations
+
+For development, debugging, and serious privacy testing, using **Tor Browser or a local Tor daemon** is strongly recommended.
+
+
 Stackedge uses the following directory structure in Termux:
 ```
 $HOME/.stackedge/
