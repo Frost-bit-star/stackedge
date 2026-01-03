@@ -1,5 +1,12 @@
 ### Stackedge
 
+<div align="center">
+  <img 
+    src="/Screenshot (4).png" 
+    alt="Desktop View of Hosted Website" 
+    style="max-width: 100%; height: auto; display: block;"
+  />
+</div>
 
 ## Decentralized App Hosting on Android using Termux + Tor
 
@@ -108,14 +115,14 @@ node -v
 npm -v
 tor --version
 ```
--- Step 2: Install Stackedge globally
+- Step 2: Install Stackedge globally
 Copy code
 Bash
 
 ```
 npm install -g stackedge
 ```
--- Step 3: Verify installation
+- Step 3: Verify installation
 Copy code
 Bash
 ```
@@ -124,7 +131,7 @@ stackedge
 ```
 You should see the CLI help output.
 
--- Step 4: Host your project
+- Step 4: Host your project
 Navigate to the root folder of the project you want to host:
 Copy code
 Bash
@@ -143,10 +150,10 @@ stackedge start <appname> -- 127.0.0.1:3000
 ```
 **Important:**
 
--- The first app must run on port 3000.
--- Subsequent apps should increment the port by 1: second app → 3001, third app → 3002, etc.
--- Do not skip ports, otherwise the app will fail to start.
--- Stackedge will run your app in the background and automatically create a Tor hidden service:
+- The first app must run on port 3000.
+- Subsequent apps should increment the port by 1: second app → 3001, third app → 3002, etc.
+- Do not skip ports, otherwise the app will fail to start.
+- Stackedge will run your app in the background and automatically create a Tor hidden service:
 Copy code
 
 ```
