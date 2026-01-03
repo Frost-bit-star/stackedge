@@ -12,7 +12,6 @@ const { spawn } = require("child_process");
 const net = require("net");
 const fs = require("fs-extra");
 const path = require("path");
-const crypto = require("crypto");
 
 /* =========================
    TOR CONSTANTS
@@ -51,10 +50,7 @@ async function waitForPort(port, timeout = 15000) {
     try {
       await new Promise((res, rej) => {
         const s = net.createConnection(port, "127.0.0.1");
-        s.once("connect", () => {
-          s.end();
-          res();
-        });
+        s.once("connect", () => { s.end(); res(); });
         s.once("error", rej);
       });
       return;
@@ -89,10 +85,7 @@ Log notice stdout
 async function isTorRunning() {
   return new Promise((resolve) => {
     const socket = net.createConnection(CONTROL_PORT, "127.0.0.1");
-    socket.once("connect", () => {
-      socket.end();
-      resolve(true);
-    });
+    socket.once("connect", () => { socket.end(); resolve(true); });
     socket.once("error", () => resolve(false));
   });
 }
@@ -149,7 +142,7 @@ async function waitForTorBootstrap() {
 }
 
 /* =========================
-   HIDDEN SERVICE FIX (MISSING)
+   HIDDEN SERVICE MANAGEMENT
 ========================= */
 
 async function addHiddenService(name, ports) {
@@ -159,13 +152,10 @@ async function addHiddenService(name, ports) {
 
   const lines = [
     `HiddenServiceDir ${hsPath}`,
-    ...ports.map(p =>
-      `HiddenServicePort ${p.virtual} 127.0.0.1:${p.target}`
-    )
+    ...ports.map(p => `HiddenServicePort ${p.virtual} 127.0.0.1:${p.target}`)
   ];
 
   await fs.appendFile(TORRC, "\n" + lines.join("\n") + "\n");
-
   await torControl("SIGNAL RELOAD");
 
   const hostnamePath = path.join(hsPath, "hostname");
@@ -181,7 +171,6 @@ async function addHiddenService(name, ports) {
 
 async function cleanupOrphans(apps) {
   const active = new Set(apps.map(a => a.name));
-
   if (!await fs.pathExists(TOR_HS_DIR)) return;
 
   for (const dir of await fs.readdir(TOR_HS_DIR)) {
@@ -208,10 +197,12 @@ program.command("start <name>")
     const command = process.argv.slice(idx + 1).join(" ");
     const apps = await loadApps();
 
-    const ports = [
-      { virtual: 80, target: Number(process.env.PORT || await getFreePort()) },
-      { virtual: 443, target: Number(process.env.SSL_PORT || await getFreePort()) }
-    ];
+    // Use custom ports if provided via env, otherwise allocate dynamically
+    const httpPort = Number(process.env.PORT || await getFreePort());
+    const sslPort = process.env.SSL_PORT ? Number(process.env.SSL_PORT) : null;
+
+    const ports = [{ virtual: 80, target: httpPort }];
+    if (sslPort) ports.push({ virtual: 443, target: sslPort });
 
     await startTorOnce();
     await waitForTorBootstrap();
@@ -222,13 +213,10 @@ program.command("start <name>")
       cwd: process.cwd(),
       detached: true,
       stdio: "ignore",
-      env: {
-        ...process.env,
-        PORT: String(ports[0].target),
-        SSL_PORT: String(ports[1].target)
-      }
+      env: { ...process.env, PORT: String(httpPort), SSL_PORT: sslPort ? String(sslPort) : undefined }
     });
 
+    // Wait for all mapped ports
     for (const p of ports) await waitForPort(p.target);
 
     const onion = await addHiddenService(name, ports);
@@ -247,7 +235,7 @@ program.command("start <name>")
     await saveApps(apps);
 
     console.log(`✔ ${name} running in background`);
-    console.log(`🌐 https://${onion}`);
+    console.log(`🌐 http${sslPort ? "s" : ""}://${onion}`);
   });
 
 /* =========================
