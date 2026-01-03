@@ -1,8 +1,5 @@
 ### Stackedge
 
-<div align="center">
-  <img src="/download.jfif" alt="Stackedge Logo" width="200"/>
-</div>
 
 ## Decentralized App Hosting on Android using Termux + Tor
 
@@ -75,38 +72,104 @@ pkg install php -y
 ```
 
 **Optional for Go apps:**
+
 ```
 pkg install golang -y
-
 ```
 **Optional for Python apps:**
 ```
 pkg install python -y
 ```
-### Installation
 
-**Clone the Stackedge repository:**
-```
-cd $HOME
-git clone https://github.com/Frost-bit-star/stackedge.git
-cd stackedge
-```
+### Installation & Usage
 
+-- Step 1: Install dependencies
+For Termux / Linux:
+Copy code
 
-**Install globally via npm:**
-```
-npm install -g .
-```
+Bash
+# Update packages
 
-**Make sure the CLI is executable:**
 ```
-chmod +x $HOME/.npm-global/bin/stackedge
-```
+pkg update -y && pkg upgrade -y
 
-**Verify installation:**
+# Install Node.js and npm
+pkg install nodejs -y
+
+# Install Tor
+pkg install tor -y
+```
+Make sure node, npm, and tor are in your PATH:
+Copy code
+Bash
+
+```
+node -v
+npm -v
+tor --version
+```
+-- Step 2: Install Stackedge globally
+Copy code
+Bash
+
+```
+npm install -g stackedge
+```
+-- Step 3: Verify installation
+Copy code
+Bash
 ```
 stackedge
+
 ```
+You should see the CLI help output.
+
+-- Step 4: Host your project
+Navigate to the root folder of the project you want to host:
+Copy code
+Bash
+
+```
+cd /path/to/your/project
+
+```
+Start your app with Stackedge:
+Copy code
+Bash
+
+```
+stackedge start <appname> -- 127.0.0.1:3000
+
+```
+**Important:**
+
+-- The first app must run on port 3000.
+-- Subsequent apps should increment the port by 1: second app → 3001, third app → 3002, etc.
+-- Do not skip ports, otherwise the app will fail to start.
+-- Stackedge will run your app in the background and automatically create a Tor hidden service:
+Copy code
+
+```
+✔ <appname> running in background
+🌐 https://<generated-onion-url>
+    
+```
+---
+
+### Dashboard & Screenshots
+
+**Dashboard View of running apps**
+
+<div align="center">
+  <img src="/Screenshot_20260103-160100.png" alt="Desktop View of Hosted Website" width="600"/>
+</div>
+
+**Running Logs in Stackedge**
+
+<div align="center">
+  <img src="/Screenshot_20260103-175414.png" alt="Stackedge Running Logs" width="600"/>
+</div>
+---
 
 **You should see a status summary and available commands.**
 
