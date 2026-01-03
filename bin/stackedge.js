@@ -149,6 +149,49 @@ async function waitForTorBootstrap() {
 }
 
 /* =========================
+   HIDDEN SERVICE FIX (MISSING)
+========================= */
+
+async function addHiddenService(name, ports) {
+  const hsPath = path.join(TOR_HS_DIR, name);
+  await fs.ensureDir(hsPath);
+  await fs.chmod(hsPath, 0o700);
+
+  const lines = [
+    `HiddenServiceDir ${hsPath}`,
+    ...ports.map(p =>
+      `HiddenServicePort ${p.virtual} 127.0.0.1:${p.target}`
+    )
+  ];
+
+  await fs.appendFile(TORRC, "\n" + lines.join("\n") + "\n");
+
+  await torControl("SIGNAL RELOAD");
+
+  const hostnamePath = path.join(hsPath, "hostname");
+  for (let i = 0; i < 30; i++) {
+    if (await fs.pathExists(hostnamePath)) {
+      return (await fs.readFile(hostnamePath, "utf8")).trim();
+    }
+    await sleep(500);
+  }
+
+  throw new Error("Hidden service hostname not created");
+}
+
+async function cleanupOrphans(apps) {
+  const active = new Set(apps.map(a => a.name));
+
+  if (!await fs.pathExists(TOR_HS_DIR)) return;
+
+  for (const dir of await fs.readdir(TOR_HS_DIR)) {
+    if (!active.has(dir)) {
+      await fs.remove(path.join(TOR_HS_DIR, dir));
+    }
+  }
+}
+
+/* =========================
    START COMMAND
 ========================= */
 
@@ -173,10 +216,6 @@ program.command("start <name>")
     await startTorOnce();
     await waitForTorBootstrap();
 
-    /* =========================
-        BACKGROUND PROCESS FIX
-    ========================= */
-
     startProcess({
       name,
       command,
@@ -189,8 +228,6 @@ program.command("start <name>")
         SSL_PORT: String(ports[1].target)
       }
     });
-
-    /* ========================= */
 
     for (const p of ports) await waitForPort(p.target);
 
