@@ -12,6 +12,7 @@ const { spawn } = require("child_process");
 const net = require("net");
 const fs = require("fs-extra");
 const path = require("path");
+const crypto = require("crypto");
 
 /* =========================
    TOR CONSTANTS
@@ -44,6 +45,26 @@ async function getFreePort(start = 3000, end = 9000) {
   throw new Error("No free ports");
 }
 
+async function waitForPort(port, timeout = 15000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try {
+      await new Promise((res, rej) => {
+        const s = net.createConnection(port, "127.0.0.1");
+        s.once("connect", () => {
+          s.end();
+          res();
+        });
+        s.once("error", rej);
+      });
+      return;
+    } catch {
+      await sleep(300);
+    }
+  }
+  throw new Error(`Port ${port} never opened`);
+}
+
 /* =========================
    TOR MANAGEMENT
 ========================= */
@@ -51,7 +72,6 @@ async function getFreePort(start = 3000, end = 9000) {
 async function ensureTorFilesystem() {
   await fs.ensureDir(TOR_BASE);
   await fs.ensureDir(TOR_HS_DIR);
-
   await fs.chmod(TOR_BASE, 0o700);
   await fs.chmod(TOR_HS_DIR, 0o700);
 
@@ -79,16 +99,14 @@ async function isTorRunning() {
 
 async function startTorOnce() {
   await ensureTorFilesystem();
-
   if (await isTorRunning()) return;
 
   spawn(TOR_BIN, ["-f", TORRC], {
     detached: true,
-    stdio: "ignore",
+    stdio: "ignore"
   }).unref();
 
-  // wait for control port
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 20; i++) {
     if (await isTorRunning()) return;
     await sleep(1000);
   }
@@ -97,22 +115,19 @@ async function startTorOnce() {
 }
 
 /* =========================
-   TOR CONTROL PORT
+   TOR CONTROL
 ========================= */
 
 async function torControl(cmd) {
-  const cookie = await fs.readFile(
-    path.join(TOR_BASE, "control_auth_cookie")
-  );
+  const cookie = await fs.readFile(path.join(TOR_BASE, "control_auth_cookie"));
 
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(CONTROL_PORT, "127.0.0.1");
 
     socket.on("error", reject);
-
-    socket.on("data", (data) => {
-      if (data.toString().startsWith("250")) {
-        resolve(data.toString());
+    socket.on("data", d => {
+      if (d.toString().startsWith("250")) {
+        resolve(d.toString());
         socket.end();
       }
     });
@@ -125,16 +140,12 @@ async function torControl(cmd) {
   });
 }
 
-async function addHiddenService(name, port) {
-  const dir = path.join(TOR_HS_DIR, name);
-  await fs.ensureDir(dir);
-  await fs.chmod(dir, 0o700);
-
-  const res = await torControl(
-    `ADD_ONION NEW:ED25519-V3 Port=${port},127.0.0.1:${port}`
-  );
-
-  return res.match(/ServiceID=(\S+)/)[1] + ".onion";
+async function waitForTorBootstrap() {
+  for (;;) {
+    const res = await torControl("GETINFO status/bootstrap-phase");
+    if (res.includes("PROGRESS=100")) return;
+    await sleep(1000);
+  }
 }
 
 /* =========================
@@ -154,22 +165,41 @@ program.command("start <name>")
     const command = process.argv.slice(idx + 1).join(" ");
     const apps = await loadApps();
 
-    const port = process.env.PORT || await getFreePort();
+    const ports = [
+      { virtual: 80, target: Number(process.env.PORT || await getFreePort()) },
+      { virtual: 443, target: Number(process.env.SSL_PORT || await getFreePort()) }
+    ];
 
     await startTorOnce();
+    await waitForTorBootstrap();
 
-    const onion = await addHiddenService(name, port);
+    /* =========================
+        BACKGROUND PROCESS FIX
+    ========================= */
 
     startProcess({
       name,
       command,
       cwd: process.cwd(),
-      env: { ...process.env, PORT: String(port) }
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        PORT: String(ports[0].target),
+        SSL_PORT: String(ports[1].target)
+      }
     });
+
+    /* ========================= */
+
+    for (const p of ports) await waitForPort(p.target);
+
+    const onion = await addHiddenService(name, ports);
+    await cleanupOrphans(apps);
 
     apps.push({
       name,
-      port,
+      ports,
       onion,
       command,
       appState: "online",
@@ -179,8 +209,8 @@ program.command("start <name>")
 
     await saveApps(apps);
 
-    console.log(`✔ ${name} running`);
-    console.log(`🌐 ${onion}`);
+    console.log(`✔ ${name} running in background`);
+    console.log(`🌐 https://${onion}`);
   });
 
 /* =========================
