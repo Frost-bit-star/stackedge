@@ -275,7 +275,7 @@ Check out my other projects and tutorials:
 
 If you value open-source and anonymity, support me so I can keep building decentralized hosting tools on Android:
 
-<a href="https://buymeacoffee.com/morganmilsn" target="_blank"> <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="50" alt="Buy Me A Coffee"> </a>
+<a href="https://opencollective.com/tpkg-projects" target="_blank"> <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" height="50" alt="Buy Me A Coffee"> </a>
 
 
 License
