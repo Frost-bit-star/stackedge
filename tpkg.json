@@ -1,0 +1,17 @@
+{
+  "name": "stackedge",
+  "version": "0.1.0",
+  "description": "Decentralized app hosting on Android with Termux and Tor",
+  "author": "Frost-bit-star",
+  "repo": "https://github.com/Frost-bit-star/stackedge",
+  "install": "npm install -g stackedge",
+  "installType": "command",
+  "license": "MIT",
+  "keywords": [
+    "termux",
+    "decentralized",
+    "hosting",
+    "stackedge",
+    "CLI"
+  ]
+}
