@@ -197,8 +197,25 @@ program.command("start <name>")
     const command = process.argv.slice(idx + 1).join(" ");
     const apps = await loadApps();
 
-    // Use custom ports if provided via env, otherwise allocate dynamically
-    const httpPort = Number(process.env.PORT || await getFreePort());
+    // Try to detect explicit port in command
+    let detectedPort = null;
+
+    // Matches:
+    // 127.0.0.1:8000
+    // :8000
+    // http.server 8000
+    const match =
+      command.match(/127\.0\.0\.1:(\d+)/) ||
+      command.match(/:(\d{2,5})/) ||
+      command.match(/\s(\d{2,5})(\s|$)/);
+
+    if (match) {
+      detectedPort = Number(match[1]);
+    }
+
+    const httpPort =
+      detectedPort ||
+      (process.env.PORT ? Number(process.env.PORT) : await getFreePort());
     const sslPort = process.env.SSL_PORT ? Number(process.env.SSL_PORT) : null;
 
     const ports = [{ virtual: 80, target: httpPort }];
