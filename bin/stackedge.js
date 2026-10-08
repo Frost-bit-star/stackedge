@@ -1,267 +1,195 @@
 #!/usr/bin/env node
 
 const { program } = require("commander");
+const path = require("path");
+
 const { loadApps, saveApps } = require("../lib/registry");
 const { startProcess } = require("../lib/process");
 const { listApps } = require("../lib/tui/list");
 const { resurrect } = require("../lib/resurrect");
 const { stopApp } = require("../lib/commands/stop");
 const { restartApp } = require("../lib/commands/restart");
+const { deleteApp } = require("../lib/commands/delete");
+const { logsApp } = require("../lib/commands/logs");
+const { daemon, hasSystemd, installedAnywhere } = require("../lib/commands/daemon");
+const {
+  getFreePort,
+  isPortFree,
+  detectPortInCommand,
+  parsePort,
+  waitForPort
+} = require("../lib/ports");
+const { publishApps, waitForHostname } = require("../lib/tor/tor");
+const { ensureTorInstalled } = require("../lib/tor/install");
+const { LOG_DIR } = require("../lib/config");
 
-const { spawn } = require("child_process");
-const net = require("net");
-const fs = require("fs-extra");
-const path = require("path");
-
-/* =========================
-   TOR CONSTANTS
-========================= */
-
-const TOR_BIN = "/data/data/com.termux/files/usr/bin/tor";
-const TOR_BASE = path.join(process.env.HOME, ".tor");
-const TORRC = path.join(TOR_BASE, "torrc");
-const TOR_HS_DIR = path.join(TOR_BASE, "hidden");
-const CONTROL_PORT = 9051;
-
-/* =========================
-   UTILS
-========================= */
-
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-
-async function getFreePort(start = 3000, end = 9000) {
-  for (let p = start; p <= end; p++) {
-    try {
-      await new Promise((res, rej) => {
-        const s = net.createServer()
-          .once("error", rej)
-          .once("listening", () => s.close(res))
-          .listen(p, "127.0.0.1");
-      });
-      return p;
-    } catch {}
-  }
-  throw new Error("No free ports");
-}
-
-async function waitForPort(port, timeout = 15000) {
-  const start = Date.now();
-  while (Date.now() - start < timeout) {
-    try {
-      await new Promise((res, rej) => {
-        const s = net.createConnection(port, "127.0.0.1");
-        s.once("connect", () => { s.end(); res(); });
-        s.once("error", rej);
-      });
-      return;
-    } catch {
-      await sleep(300);
-    }
-  }
-  throw new Error(`Port ${port} never opened`);
-}
-
-/* =========================
-   TOR MANAGEMENT
-========================= */
-
-async function ensureTorFilesystem() {
-  await fs.ensureDir(TOR_BASE);
-  await fs.ensureDir(TOR_HS_DIR);
-  await fs.chmod(TOR_BASE, 0o700);
-  await fs.chmod(TOR_HS_DIR, 0o700);
-
-  if (!await fs.pathExists(TORRC)) {
-    await fs.writeFile(TORRC, `
-DataDirectory ${TOR_BASE}
-ControlPort ${CONTROL_PORT}
-CookieAuthentication 1
-AvoidDiskWrites 1
-Log notice stdout
-`.trim() + "\n");
-  }
-}
-
-async function isTorRunning() {
-  return new Promise((resolve) => {
-    const socket = net.createConnection(CONTROL_PORT, "127.0.0.1");
-    socket.once("connect", () => { socket.end(); resolve(true); });
-    socket.once("error", () => resolve(false));
-  });
-}
-
-async function startTorOnce() {
-  await ensureTorFilesystem();
-  if (await isTorRunning()) return;
-
-  spawn(TOR_BIN, ["-f", TORRC], {
-    detached: true,
-    stdio: "ignore"
-  }).unref();
-
-  for (let i = 0; i < 20; i++) {
-    if (await isTorRunning()) return;
-    await sleep(1000);
-  }
-
-  throw new Error("Tor failed to start");
-}
-
-/* =========================
-   TOR CONTROL
-========================= */
-
-async function torControl(cmd) {
-  const cookie = await fs.readFile(path.join(TOR_BASE, "control_auth_cookie"));
-
-  return new Promise((resolve, reject) => {
-    const socket = net.createConnection(CONTROL_PORT, "127.0.0.1");
-
-    socket.on("error", reject);
-    socket.on("data", d => {
-      if (d.toString().startsWith("250")) {
-        resolve(d.toString());
-        socket.end();
-      }
-    });
-
-    socket.once("connect", () => {
-      socket.write(`AUTHENTICATE ${cookie.toString("hex")}\r\n`);
-      socket.write(cmd + "\r\n");
-      socket.write("QUIT\r\n");
-    });
-  });
-}
-
-async function waitForTorBootstrap() {
-  for (;;) {
-    const res = await torControl("GETINFO status/bootstrap-phase");
-    if (res.includes("PROGRESS=100")) return;
-    await sleep(1000);
-  }
-}
-
-/* =========================
-   HIDDEN SERVICE MANAGEMENT
-========================= */
-
-async function addHiddenService(name, ports) {
-  const hsPath = path.join(TOR_HS_DIR, name);
-  await fs.ensureDir(hsPath);
-  await fs.chmod(hsPath, 0o700);
-
-  const lines = [
-    `HiddenServiceDir ${hsPath}`,
-    ...ports.map(p => `HiddenServicePort ${p.virtual} 127.0.0.1:${p.target}`)
-  ];
-
-  await fs.appendFile(TORRC, "\n" + lines.join("\n") + "\n");
-  await torControl("SIGNAL RELOAD");
-
-  const hostnamePath = path.join(hsPath, "hostname");
-  for (let i = 0; i < 30; i++) {
-    if (await fs.pathExists(hostnamePath)) {
-      return (await fs.readFile(hostnamePath, "utf8")).trim();
-    }
-    await sleep(500);
-  }
-
-  throw new Error("Hidden service hostname not created");
-}
-
-async function cleanupOrphans(apps) {
-  const active = new Set(apps.map(a => a.name));
-  if (!await fs.pathExists(TOR_HS_DIR)) return;
-
-  for (const dir of await fs.readdir(TOR_HS_DIR)) {
-    if (!active.has(dir)) {
-      await fs.remove(path.join(TOR_HS_DIR, dir));
-    }
-  }
-}
+program
+  .name("stackedge")
+  .description("Decentralized app hosting with Tor - Termux and any Linux server")
+  .version(require("../package.json").version)
+  .showHelpAfterError();
 
 /* =========================
    START COMMAND
 ========================= */
 
-program.command("start <name>")
+program
+  .command("start <name>")
+  .description("start an app in the background and expose it as an onion service")
   .allowUnknownOption(true)
-  .action(async (name) => {
-
+  .option("-p, --port <port>", "port your app listens on (default: auto-detected)")
+  .option("--ssl-port <port>", "SSL/TLS port your app listens on (optional)")
+  .option("--host <host>", "address the app listens on (default: 127.0.0.1)")
+  .action(async (name, opts) => {
     const idx = process.argv.indexOf("--");
     if (idx === -1) {
-      console.log("Usage: stackedge start <name> -- <cmd>");
+      console.log("Usage: stackedge start <name> [--port <port>] -- <cmd>");
       process.exit(1);
     }
 
-    const command = process.argv.slice(idx + 1).join(" ");
-    const apps = await loadApps();
-
-    // Try to detect explicit port in command
-    let detectedPort = null;
-
-    // Matches:
-    // 127.0.0.1:8000
-    // :8000
-    // http.server 8000
-    const match =
-      command.match(/127\.0\.0\.1:(\d+)/) ||
-      command.match(/:(\d{2,5})/) ||
-      command.match(/\s(\d{2,5})(\s|$)/);
-
-    if (match) {
-      detectedPort = Number(match[1]);
+    const command = process.argv.slice(idx + 1).join(" ").trim();
+    if (!command) {
+      console.log("Usage: stackedge start <name> [--port <port>] -- <cmd>");
+      process.exit(1);
     }
 
-    const httpPort =
-      detectedPort ||
-      (process.env.PORT ? Number(process.env.PORT) : await getFreePort());
-    const sslPort = process.env.SSL_PORT ? Number(process.env.SSL_PORT) : null;
+    const apps = await loadApps();
+    if (apps.some(a => a.name === name)) {
+      console.log(`App '${name}' already exists. Use 'stackedge restart ${name}' or another name.`);
+      process.exit(1);
+    }
+
+    // Any port works: --port beats a port found in the command, which beats
+    // $PORT, which beats "let the OS hand out a free one".
+    let httpPort;
+    try {
+      const chosen =
+        opts.port || detectPortInCommand(command) || process.env.PORT || (await getFreePort());
+      httpPort = parsePort(chosen, "--port");
+    } catch (err) {
+      console.log(err.message);
+      process.exit(1);
+    }
+
+    let sslPort = null;
+    if (opts.sslPort || process.env.SSL_PORT) {
+      try {
+        sslPort = parsePort(opts.sslPort || process.env.SSL_PORT, "--ssl-port");
+      } catch (err) {
+        console.log(err.message);
+        process.exit(1);
+      }
+    }
+
+    if (httpPort < 1024) {
+      console.log(`Note: ports below 1024 usually need root privileges (port ${httpPort}).`);
+    }
+    if (!(await isPortFree(httpPort, opts.host || "127.0.0.1"))) {
+      console.log(`Warning: port ${httpPort} is already in use - '${name}' may fail to bind.`);
+    }
 
     const ports = [{ virtual: 80, target: httpPort }];
     if (sslPort) ports.push({ virtual: 443, target: sslPort });
 
-    await startTorOnce();
-    await waitForTorBootstrap();
-
-    startProcess({
+    const app = {
       name,
       command,
       cwd: process.cwd(),
-      detached: true,
-      stdio: "ignore",
-      env: { ...process.env, PORT: String(httpPort), SSL_PORT: sslPort ? String(sslPort) : undefined }
-    });
-
-    // Wait for all mapped ports
-    for (const p of ports) await waitForPort(p.target);
-
-    const onion = await addHiddenService(name, ports);
-    await cleanupOrphans(apps);
-
-    apps.push({
-      name,
       ports,
-      onion,
-      command,
-      appState: "online",
-      torState: "online",
+      host: opts.host || null,
+      onion: null,
+      appState: "starting",
+      torState: "pending",
       autorestart: true
-    });
+    };
 
+    apps.push(app);
     await saveApps(apps);
 
-    console.log(`✔ ${name} running in background`);
-    console.log(`🌐 http${sslPort ? "s" : ""}://${onion}`);
+    await startProcess(app);
+    console.log(
+      `✔ ${name} running in background on port ${httpPort}` +
+        (sslPort ? ` (+${sslPort})` : "") +
+        `\n  logs: ${path.join(LOG_DIR, `${name}.log`)}`
+    );
+
+    try {
+      await waitForPort(httpPort, { timeout: 30000, host: opts.host });
+    } catch {
+      console.log(`✖ '${name}' never started listening on port ${httpPort}.`);
+      console.log(`  command: ${command}`);
+      console.log(`  logs:    ${path.join(LOG_DIR, `${name}.log`)}`);
+      process.exit(1);
+    }
+
+    const tor = ensureTorInstalled();
+    if (tor.ok) {
+      try {
+        await publishApps(await loadApps());
+        const onion = await waitForHostname(name);
+        await setOnion(name, onion, "online");
+        console.log(`🌐 http${sslPort ? "s" : ""}://${onion}`);
+      } catch (err) {
+        console.log(`⏳ '${name}' is up, but Tor is not ready: ${err.message}`);
+        console.log("  Run 'stackedge list' in a moment to get the onion URL.");
+      }
+    } else {
+      console.log(`⏳ '${name}' is up, but Tor is missing - run 'stackedge setup'.`);
+    }
+
+    if (hasSystemd() && !installedAnywhere()) {
+      console.log(
+        "Tip: run 'stackedge daemon install' so your apps come back after a server reboot."
+      );
+    }
   });
+
+async function setOnion(name, onion, torState) {
+  const apps = await loadApps();
+  const app = apps.find(a => a.name === name);
+  if (!app) return;
+  app.onion = onion;
+  app.torState = torState;
+  app.appState = app.pid ? "running" : app.appState;
+  await saveApps(apps);
+}
 
 /* =========================
    OTHER COMMANDS
 ========================= */
 
-program.command("stop <name>").action(stopApp);
-program.command("restart <name>").action(restartApp);
-program.command("list").action(listApps);
-program.command("resurrect").action(resurrect);
+program.command("stop <name>").description("stop a running app").action(stopApp);
+program.command("restart <name>").description("restart an app on its existing ports").action(restartApp);
+program.command("delete <name>").description("remove an app and its onion service").action(deleteApp);
+program.command("list").description("list apps, ports and onion URLs").action(listApps);
+program.command("resurrect").description("restore all apps (after reboot / Termux restart)").action(resurrect);
+program
+  .command("logs <name>")
+  .description("show recent logs for an app")
+  .option("-n, --lines <n>", "number of trailing lines", "100")
+  .action((name, opts) => logsApp(name, parseInt(opts.lines, 10) || 100));
+
+program
+  .command("daemon <action>")
+  .description("boot integration: install | uninstall | status (systemd, cron or shell hook)")
+  .action(daemon);
+
+program
+  .command("setup")
+  .description("one-shot server setup: install Tor (if missing) + start apps on boot")
+  .action(() => {
+    const tor = ensureTorInstalled();
+    if (!tor.ok) {
+      console.log("\nFix the Tor installation, then run 'stackedge setup' again.");
+      process.exit(1);
+    }
+    console.log("");
+    daemon("install");
+    console.log("\nDone. Host something with: stackedge start <name> -- <cmd>");
+  });
+
+if (process.argv.length <= 2) {
+  program.help();
+}
 
 program.parse(process.argv);
