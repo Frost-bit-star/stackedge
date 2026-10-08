@@ -162,6 +162,8 @@ stackedge start lan --host 10.0.0.5 --port 3000 -- npm start
 | `stackedge restart <name>` | Restart an app on the same ports |
 | `stackedge delete <name>` | Remove an app and its onion service |
 | `stackedge list` | Table of apps, states, ports and onion URLs |
+| `stackedge list --full` | Same, plain text, never truncated (easy to copy) |
+| `stackedge onion [name]` | Print the complete onion URL of one app (or all) |
 | `stackedge resurrect` | Restore every app (after a reboot or network drop) |
 | `stackedge logs <name> [-n 100]` | Show recent app logs |
 | `stackedge daemon <install\|uninstall\|status>` | Manage boot integration |

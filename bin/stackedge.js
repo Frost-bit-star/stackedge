@@ -11,6 +11,7 @@ const { stopApp } = require("../lib/commands/stop");
 const { restartApp } = require("../lib/commands/restart");
 const { deleteApp } = require("../lib/commands/delete");
 const { logsApp } = require("../lib/commands/logs");
+const { onionCommand } = require("../lib/commands/onion");
 const { daemon, hasSystemd, installedAnywhere } = require("../lib/commands/daemon");
 const {
   getFreePort,
@@ -161,7 +162,16 @@ async function setOnion(name, onion, torState) {
 program.command("stop <name>").description("stop a running app").action(stopApp);
 program.command("restart <name>").description("restart an app on its existing ports").action(restartApp);
 program.command("delete <name>").description("remove an app and its onion service").action(deleteApp);
-program.command("list").description("list apps, ports and onion URLs").action(listApps);
+program
+  .command("list")
+  .description("list apps, ports and onion URLs")
+  .option("-f, --full", "plain output with full onion URLs (nothing truncated)")
+  .action(opts => listApps({ full: Boolean(opts.full) }));
+
+program
+  .command("onion [name]")
+  .description("print the complete onion URL of an app (or all apps)")
+  .action(onionCommand);
 program.command("resurrect").description("restore all apps (after reboot / Termux restart)").action(resurrect);
 program
   .command("logs <name>")
