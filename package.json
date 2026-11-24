@@ -1,6 +1,6 @@
 {
   "name": "stackedge",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "Tor-based decentralized app hosting for Termux, Linux servers and VPS",
   "bin": {
     "stackedge": "bin/stackedge.js"
