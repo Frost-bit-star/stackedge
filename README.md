@@ -34,7 +34,12 @@ reboot everything comes back on its own.
 - Coexists with a system Tor daemon: if the default control port is taken, stackedge
   automatically moves to a free one.
 
-- CLI similar to pm2: `start`, `stop`, `restart`, `delete`, `list`, `resurrect`, `logs`.
+- **Built-in Security Engine**: a lightweight Node.js reverse proxy with Nginx-style security
+  headers, rate limiting, request limits, method and Host validation, path-traversal blocking,
+  access logging and an audit score. Enabled by default, no Nginx required.
+
+- CLI similar to pm2: `start`, `stop`, `restart`, `delete`, `list`, `resurrect`, `logs`,
+  plus `stackedge security <status|enable|disable|audit|fix|headers|logs|rules|reset>`.
 
 **Open-source and focused on privacy & decentralization.**
 
@@ -48,6 +53,7 @@ reboot everything comes back on its own.
 - [Commands](#commands)
 - [Boot integration (reboots)](#boot-integration-reboots)
 - [Configuration](#configuration)
+- [Security Engine](#security-engine)
 - [Data directory](#data-directory)
 - [Dashboard & Screenshots](#dashboard--screenshots)
 - [Tor onion testing](#tor-onion-testing)
@@ -168,6 +174,14 @@ stackedge start lan --host 10.0.0.5 --port 3000 -- npm start
 | `stackedge logs <name> [-n 100]` | Show recent app logs |
 | `stackedge daemon <install\|uninstall\|status>` | Manage boot integration |
 | `stackedge setup` | Install Tor if missing + install boot integration |
+| `stackedge security status` | Show engine state, config path and score |
+| `stackedge security enable` / `disable` | Turn the security engine on or off |
+| `stackedge security audit` | Run configuration checks and print a score |
+| `stackedge security fix` | Apply safe automatic fixes |
+| `stackedge security headers` | Show currently injected HTTP headers |
+| `stackedge security logs [-n 100]` | Show recent security events |
+| `stackedge security rules` | Show active security rules |
+| `stackedge security reset` | Restore the default security configuration |
 
 ---
 
@@ -218,12 +232,120 @@ stackedge start blog -- npm start
 
 ---
 
+### Security Engine
+
+Stackedge puts a lightweight HTTP security proxy between Tor and your app. No Nginx install,
+no extra system packages - the proxy is plain Node.js, so it works on Termux, Linux, VPS and
+macOS.
+
+```
+Tor network -> onion service -> Stackedge Security Engine -> application port
+                                   |  rate limit / host + method + path checks
+                                   |  body + header limits / timeouts
+                                   |  security headers / access log
+```
+
+When security is enabled (the default), `stackedge start` allocates a loopback-only proxy
+port for the app, starts the proxy as a detached process and points `HiddenServicePort 80`
+at the proxy instead of the application. The app itself keeps listening on `127.0.0.1`;
+Tor never gets a direct route to the backend port. `stop`, `restart`, `delete` and
+`resurrect` manage the proxy along with the app.
+
+Edit `~/.stackedge/security.json` (created with defaults on first write). All fields are
+optional and are merged with the defaults:
+
+```json
+{
+  "security": {
+    "enabled": true,
+    "headers": {
+      "x-frame-options": "DENY",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin-when-cross-origin",
+      "x-xss-protection": "0",
+      "content-security-policy": "default-src 'self'"
+    },
+    "rateLimit": {
+      "enabled": true,
+      "requests": 100,
+      "window": 60,
+      "blockDuration": 300
+    },
+    "requestLimits": {
+      "maxBodySize": "10mb",
+      "maxHeaderSize": "16kb",
+      "timeout": 30000
+    },
+    "methods": ["GET", "POST", "HEAD", "OPTIONS"],
+    "directoryListing": false,
+    "pathTraversalProtection": true,
+    "hostValidation": true,
+    "allowedHosts": [],
+    "accessLog": true,
+    "connectionLimit": 100,
+    "tls": { "enabled": false, "cert": "", "key": "" }
+  }
+}
+```
+
+Notes on the defaults:
+
+- `content-security-policy` is intentionally strict. Applications that load external scripts,
+  fonts or images need a custom CSP; change it, don't remove the whole header.
+- `allowedHosts` is optional. Onion hostnames from the registry and `localhost` are accepted
+  automatically.
+- `tls` protects the local hop when other devices on the LAN can reach the proxy. The proxy
+  still listens on `127.0.0.1` only. Certificate paths may be absolute or relative to
+  `~/.stackedge`.
+- Rule changes are picked up when the proxy restarts: run `stackedge restart <name>` (or
+  `stackedge security enable` for every app).
+- `stackedge start --ssl-port` keeps the virtual `443` mapping pointed straight at the app's
+  TLS listener. The security engine currently filters the HTTP (`80`) mapping only.
+- Tor clients do not have a meaningful public client IP. When a request arrives from loopback
+  the rate limiter uses one shared bucket, so it protects the backend from flooding but cannot
+  distinguish individual onion users. Don't rely on IP blocking for onion services.
+
+Rejected and completed requests are written as JSON lines to
+`~/.stackedge/logs/security.log`. Query strings and header values are not logged. Application
+output stays in `~/.stackedge/logs/<name>.log`.
+
+```
+stackedge security status       # is it on, where is the config, current score
+stackedge security headers      # effective headers
+stackedge security rules        # effective rules
+stackedge security logs -n 50   # recent security events
+stackedge security audit        # checks + score
+stackedge security fix          # safe fixes, e.g. restore missing critical headers
+stackedge security enable       # enable and restart all proxies
+stackedge security disable      # stop proxies and point Tor straight at apps
+stackedge security reset        # restore defaults
+```
+
+`security audit` checks real state: Tor reachability, loopback bindings, wildcard listeners on
+backend ports, required headers, size limits, rate limiting, traversal/Host/directory rules,
+access logging, TLS, running proxies and process privileges.
+
+```
+STACKEDGE SECURITY AUDIT
+
+[PASS] Tor service running - control port is open
+[PASS] Application bound to localhost - 1 app(s) bound to loopback
+[PASS] Security headers enabled - 5 headers active
+[WARN] TLS for local connections - not configured
+
+Security Score: 85/100
+1 recommendation available.
+```
+
+---
+
 ### Data directory
 
 ```
 ~/.stackedge/
- ├── apps.json          # registry: apps, ports, onion addresses
- ├── logs/              # <name>.log for every app
+ ├── apps.json          # registry: apps, ports, onion addresses, proxy state
+ ├── security.json      # security engine rules and headers
+ ├── logs/              # <name>.log for every app + security.log
  └── tor/
      ├── torrc          # regenerated from the registry on every change
      ├── control-port   # control port actually in use

@@ -23,6 +23,17 @@ const {
 const { publishApps, waitForHostname } = require("../lib/tor/tor");
 const { ensureTorInstalled } = require("../lib/tor/install");
 const { LOG_DIR } = require("../lib/config");
+const { ensureProxy } = require("../lib/security/manager");
+const {
+  securityStatus,
+  setEnabled,
+  securityAudit,
+  securityFix,
+  securityHeaders,
+  securityLogs,
+  securityRules,
+  securityReset
+} = require("../lib/commands/security");
 
 program
   .name("stackedge")
@@ -88,6 +99,12 @@ program
     if (!(await isPortFree(httpPort, opts.host || "127.0.0.1"))) {
       console.log(`Warning: port ${httpPort} is already in use - '${name}' may fail to bind.`);
     }
+    if (opts.host && !["127.0.0.1", "::1", "localhost"].includes(opts.host)) {
+      console.log(
+        `Warning: --host ${opts.host} exposes the backend directly. ` +
+          "Use 127.0.0.1 so the security proxy is the only entry point."
+      );
+    }
 
     const ports = [{ virtual: 80, target: httpPort }];
     if (sslPort) ports.push({ virtual: 443, target: sslPort });
@@ -103,6 +120,13 @@ program
       torState: "pending",
       autorestart: true
     };
+
+    try {
+      await ensureProxy(app, { save: false });
+    } catch (err) {
+      console.log(err.message);
+      process.exit(1);
+    }
 
     apps.push(app);
     await saveApps(apps);
@@ -183,6 +207,24 @@ program
   .command("daemon <action>")
   .description("boot integration: install | uninstall | status (systemd, cron or shell hook)")
   .action(daemon);
+
+const security = program
+  .command("security")
+  .description("manage the built-in security engine");
+
+security.command("status").description("show security status").action(securityStatus);
+security.command("enable").description("enable the security engine").action(() => setEnabled(true));
+security.command("disable").description("disable the security engine").action(() => setEnabled(false));
+security.command("audit").description("audit configurations for security issues").action(securityAudit);
+security.command("fix").description("apply safe automatic fixes").action(securityFix);
+security.command("headers").description("show active HTTP security headers").action(securityHeaders);
+security
+  .command("logs")
+  .description("show recent security events")
+  .option("-n, --lines <n>", "number of trailing lines", "100")
+  .action(opts => securityLogs(parseInt(opts.lines, 10) || 100));
+security.command("rules").description("show active security rules").action(securityRules);
+security.command("reset").description("restore the default security configuration").action(securityReset);
 
 program
   .command("setup")
