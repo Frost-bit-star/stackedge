@@ -283,6 +283,10 @@ optional and are merged with the defaults:
     "allowedHosts": [],
     "accessLog": true,
     "connectionLimit": 100,
+    "cluster": {
+      "enabled": true,
+      "workers": "auto"
+    },
     "tls": { "enabled": false, "cert": "", "key": "" }
   }
 }
@@ -297,6 +301,12 @@ Notes on the defaults:
 - `tls` protects the local hop when other devices on the LAN can reach the proxy. The proxy
   still listens on `127.0.0.1` only. Certificate paths may be absolute or relative to
   `~/.stackedge`.
+- `cluster.workers: "auto"` forks one proxy worker per detected CPU core (capped at 16) so
+  traffic is not stuck on a single core. Set a number from `1` to `64` to tune it, or
+  `cluster.enabled: false` for a single process. Rate limiting and the audit score stay global
+  across workers; the per-worker connection cap is `connectionLimit / workers`.
+- Only the security proxy is forked. Your app command is still started once: arbitrary apps
+  cannot safely be duplicated (they may not be cluster-aware or may share writable state).
 - Rule changes are picked up when the proxy restarts: run `stackedge restart <name>` (or
   `stackedge security enable` for every app).
 - `stackedge start --ssl-port` keeps the virtual `443` mapping pointed straight at the app's
