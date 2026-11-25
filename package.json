@@ -24,7 +24,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Frost-bit-star/stackedge.git"
+    "url": "git+https://github.com/Frost-bit-star/stackedge.git"
   },
   "homepage": "https://www.youtube.com/@Mr_termux-r2l",
   "dependencies": {
