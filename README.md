@@ -134,11 +134,12 @@ Navigate to the project you want to host and start it:
 
 ```
 cd ~/my-react-app
-stackedge start blog -- npm start
+stackedge start blog --tor -- npm start
 ```
 
 - `blog` is the app name.
 - Everything after `--` is the command used to start the app.
+- Pick `--tor`, `--vercel`, `--tor --vercel`, or `--local`. With no provider flag, Stackedge asks interactively.
 
 Output:
 
@@ -153,9 +154,9 @@ Output:
 Stackedge never forces ports. Pick one:
 
 ```
-stackedge start api --port 8080 -- node server.js
-stackedge start site --port 4242 -- python3 -m http.server
-stackedge start blog -- npm start                      # free port is picked for you
+stackedge start api --port 8080 --tor -- node server.js
+stackedge start site --port 4242 --vercel -- python3 -m http.server
+stackedge start blog --local -- npm start              # free port is picked for you
 ```
 
 The port is also taken from, in this order:
@@ -171,7 +172,7 @@ that already honour `PORT` work without changes.
 Apps that bind a specific interface can use `--host`:
 
 ```
-stackedge start lan --host 10.0.0.5 --port 3000 -- npm start
+stackedge start lan --host 10.0.0.5 --port 3000 --tor -- npm start
 ```
 
 ---
@@ -180,7 +181,7 @@ stackedge start lan --host 10.0.0.5 --port 3000 -- npm start
 
 | Command | Description |
 | --- | --- |
-| `stackedge start <name> [--port <n>] [--ssl-port <n>] [--host <ip>] -- <cmd>` | Start an app and publish it as an onion service |
+| `stackedge start <name> [--port <n>] [--ssl-port <n>] [--host <ip>] [--tor] [--vercel] [--local] -- <cmd>` | Start an app with a chosen hosting provider |
 | `stackedge stop <name>` | Stop an app (kills its whole process group) |
 | `stackedge restart <name>` | Restart an app on the same ports |
 | `stackedge delete <name>` | Remove an app and its onion service |
@@ -214,9 +215,10 @@ stackedge start lan --host 10.0.0.5 --port 3000 -- npm start
 
 ### Vercel publishing
 
-Stackedge generates one FRPS deployment per app. The generated project lives in
-`~/.stackedge/vercel/<app>/project` and is deployed to Vercel; the FRPC client stays inside
-this CLI and dials the deployment outbound through the local Stackedge security proxy.
+Stackedge generates one FRPS deployment per app. In `--vercel` mode, Tor is not installed and
+not started. The generated project lives in `~/.stackedge/vercel/<app>/project` and is deployed
+to Vercel; the FRPC client stays inside this CLI and dials the deployment outbound through the
+local Stackedge security proxy.
 The generated `config.json` carries the service ID and token, so Hobby deployments work
 without setting Vercel environment variables. Keep the generated project private because
 that file contains a live bearer token. No Redis, database, VPS or incoming device port
@@ -228,6 +230,13 @@ stackedge start myapp --port 3000 --vercel -- npm start
 stackedge vercel deploy myapp https://myapp.vercel.app
 stackedge vercel probe myapp
 stackedge vercel connect myapp
+```
+
+To add Vercel to an app that is already running locally:
+
+```sh
+stackedge start myapp --port 3000 --local -- npm start
+stackedge vercel init myapp
 ```
 
 Always run `stackedge vercel probe <app>` before relying on the deployment. Vercel Functions

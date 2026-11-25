@@ -24,6 +24,7 @@ const { publishApps, waitForHostname } = require("../lib/tor/tor");
 const { ensureTorInstalled } = require("../lib/tor/install");
 const { LOG_DIR } = require("../lib/config");
 const { ensureProxy } = require("../lib/security/manager");
+const { resolveProviders, usesTor, usesVercel, hostingKey } = require("../lib/hosting");
 const {
   vercelInit,
   vercelDeploy,
@@ -59,12 +60,14 @@ program
 
 program
   .command("start <name>")
-  .description("start an app in the background and expose it as an onion service")
+  .description("start an app in the background and publish it with Tor, Vercel, or localhost")
   .allowUnknownOption(true)
   .option("-p, --port <port>", "port your app listens on (default: auto-detected)")
   .option("--ssl-port <port>", "SSL/TLS port your app listens on (optional)")
   .option("--host <host>", "address the app listens on (default: 127.0.0.1)")
-  .option("--vercel", "generate a Vercel FRPS deployment for this app")
+  .option("--tor", "publish through a Tor onion service")
+  .option("--vercel", "publish through a Vercel deployment")
+  .option("--local", "run locally without public publishing")
   .action(async (name, opts) => {
     const idx = process.argv.indexOf("--");
     if (idx === -1) {
@@ -75,6 +78,14 @@ program
     const command = process.argv.slice(idx + 1).join(" ").trim();
     if (!command) {
       console.log("Usage: stackedge start <name> [--port <port>] -- <cmd>");
+      process.exit(1);
+    }
+
+    let providers;
+    try {
+      providers = await resolveProviders(opts);
+    } catch (err) {
+      console.log(err.message);
       process.exit(1);
     }
 
@@ -130,7 +141,9 @@ program
       host: opts.host || null,
       onion: null,
       appState: "starting",
-      torState: "pending",
+      providers,
+      hosting: hostingKey(providers),
+      torState: usesTor(providers) ? "pending" : "disabled",
       autorestart: true
     };
 
@@ -160,7 +173,7 @@ program
       process.exit(1);
     }
 
-    if (opts.vercel) {
+    if (usesVercel(providers)) {
       try {
         await vercelInit(name);
       } catch (err) {
@@ -168,19 +181,23 @@ program
       }
     }
 
-    const tor = ensureTorInstalled();
-    if (tor.ok) {
-      try {
-        await publishApps(await loadApps());
-        const onion = await waitForHostname(name);
-        await setOnion(name, onion, "online");
-        console.log(`🌐 http${sslPort ? "s" : ""}://${onion}`);
-      } catch (err) {
-        console.log(`⏳ '${name}' is up, but Tor is not ready: ${err.message}`);
-        console.log("  Run 'stackedge list' in a moment to get the onion URL.");
+    if (usesTor(providers)) {
+      const tor = ensureTorInstalled();
+      if (tor.ok) {
+        try {
+          await publishApps(await loadApps());
+          const onion = await waitForHostname(name);
+          await setOnion(name, onion, "online");
+          console.log(`🌐 http${sslPort ? "s" : ""}://${onion}`);
+        } catch (err) {
+          console.log(`⏳ '${name}' is up, but Tor is not ready: ${err.message}`);
+          console.log("  Run 'stackedge list' in a moment to get the onion URL.");
+        }
+      } else {
+        console.log(`⏳ '${name}' is up, but Tor is missing - run 'stackedge setup'.`);
       }
     } else {
-      console.log(`⏳ '${name}' is up, but Tor is missing - run 'stackedge setup'.`);
+      console.log(`Tor disabled for '${name}' (hosting: ${providers.join(" + ")}).`);
     }
 
     if (hasSystemd() && !installedAnywhere()) {
@@ -222,7 +239,7 @@ program
   .description("restore all apps (after reboot / Termux restart)")
   .action(async () => {
     await resurrect();
-    const tunnels = resurrectTunnels();
+    const tunnels = await resurrectTunnels();
     if (tunnels.length) {
       console.log(`Restored ${tunnels.length} Vercel tunnel${tunnels.length === 1 ? "" : "s"}.`);
     }
