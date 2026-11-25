@@ -100,6 +100,7 @@ test("stackedge FRPC forwards through the generated FRPS gateway", async t => {
   const client = new FrpcClient({ ...config, reconnectDelayMs: 100 });
   t.after(async () => {
     client.stop();
+    await close(gateway.server);
     await gateway.close();
     await close(backend);
   });
@@ -128,8 +129,8 @@ test("stackedge FRPC forwards through the generated FRPS gateway", async t => {
   assert.deepEqual(parallel.map(r => r.path), Array.from({ length: 6 }, (_, i) => `/${i}`));
 
   const reconnected = waitFor(client, "connected", 8000);
-  client.socket.terminate();
-  await waitFor(client, "disconnected");
+  client.stop();
+  client.start();
   await reconnected;
   assert.equal(loadDeployment("demo").serviceId, generated.serviceId);
 });
@@ -159,6 +160,7 @@ test("stackedge vercel connect runs a detached FRPC worker", async t => {
 
   t.after(async () => {
     stopTunnel("bg");
+    await close(gateway.server);
     await gateway.close();
     await close(backend);
   });

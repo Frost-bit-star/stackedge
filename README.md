@@ -203,7 +203,7 @@ stackedge start lan --host 10.0.0.5 --port 3000 --tor -- npm start
 | `stackedge start <name> --vercel -- <cmd>` | Start an app and generate its Vercel deployment |
 | `stackedge vercel init <name>` | Generate a unique Vercel FRPS project and credentials |
 | `stackedge vercel deploy <name> <url>` | Save the Vercel URL for the generated deployment |
-| `stackedge vercel probe <name>` | Verify deployment identity, auth, WebSocket and routing |
+| `stackedge vercel probe <name>` | Verify deployment identity, auth, worker polling and routing |
 | `stackedge vercel connect <name>` | Start the outbound FRPC tunnel in the background |
 | `stackedge vercel disconnect <name>` | Stop the tunnel |
 | `stackedge vercel reconnect <name>` | Restart the tunnel |
@@ -222,8 +222,7 @@ The FRPC client stays inside this CLI and dials the deployment outbound through 
 Stackedge security proxy.
 The generated `config.json` carries the service ID and token, so Hobby deployments work
 without setting Vercel environment variables. Keep the generated project private because
-that file contains a live bearer token. No Redis, database, VPS or incoming device port
-is required.
+that file contains a live bearer token. No VPS or incoming device port is required.
 
 ```sh
 stackedge start myapp --port 3000 --vercel -- npm start
@@ -240,14 +239,35 @@ stackedge start myapp --port 3000 --local -- npm start
 stackedge vercel init myapp
 ```
 
-The generated `api/gateway.js` exports a Node HTTP server, so Vercel can accept `/_frpc`
-WebSocket upgrades with Fluid compute. FRPC reconnects when Vercel closes a connection at the
-function duration limit.
+The generated `api/gateway.js` exports a Node HTTP server. Fluid compute is recommended so
+`/_frpc/poll` can stay open for up to 20 seconds. The CLI starts multiple FRPC workers that pull
+requests from the gateway and POST results back through `/_frpc/result`.
 
 Always run `stackedge vercel probe <app>` before relying on the deployment. Public HTTP requests
-are not guaranteed to reach the instance holding the in-memory tunnel. If the probe reports
-`cross-instance` routing, use the generated `server.js` on a long-lived Node runtime, or add a
-shared store so every instance can reach the tunnel state.
+can land on a different Vercel instance than the FRPC worker. For reliable Vercel routing, add a
+free user-owned Redis database and set one of:
+
+- `REDIS_URL`
+- `REDIS_CONNECTION_STRING`
+- `STACKEDGE_REDIS_URL`
+
+Upstash REST credentials are also accepted with `UPSTASH_REDIS_REST_URL` and
+`UPSTASH_REDIS_REST_TOKEN`; `KV_REST_API_URL` and `KV_REST_API_TOKEN` are aliases. The generated
+gateway uses a short-lived Redis request/result mailbox so every instance can serve public traffic.
+Without Redis, the gateway falls back to an in-memory mailbox for local development only.
+
+Probe results:
+
+- `pull-redis`: reverse pull with Redis is active.
+- `pull-memory`: reverse pull with local in-memory state only.
+- `legacy`: the deployment is outdated and must be redeployed.
+
+Trade-offs:
+
+- Without Redis, setup is simpler and still free, but Vercel can send a visitor request to a different instance than the FRPC workers, so routing is not reliable.
+- With Redis, routing is cross-instance reliable, but the app needs a user-owned free Redis database, shared bodies are capped at 6 MiB, and requests can wait for the next worker poll.
+- WebSocket tunnels are not used on Vercel because sockets are pinned to one Function instance; cookies do not affect Vercel instance affinity.
+- Vercel Blob was not chosen as the default Redis-free mailbox because its free tier has monthly operation limits and higher latency.
 
 ---
 

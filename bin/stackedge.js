@@ -279,7 +279,7 @@ const vercel = program
 
 vercel.command("init <name>").description("generate a Vercel deployment project").option("--force", "replace an existing deployment").action(vercelInit);
 vercel.command("deploy <name> <url>").description("save and verify a deployment URL").action(vercelDeploy);
-vercel.command("probe <name>").description("verify deployment identity, WebSocket and routing").action(vercelProbe);
+  vercel.command("probe <name>").description("verify deployment identity, worker polling and routing").action(vercelProbe);
 vercel
   .command("connect <name>")
   .description("start the outbound FRPC tunnel")
