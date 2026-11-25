@@ -36,6 +36,14 @@ function waitFor(emitter, event, timeoutMs = 5000) {
   });
 }
 
+test("vercel init writes a deployable project into the app root", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "stackedge-vercel-root-"));
+  const generated = initDeployment("exported", { cwd });
+  assert.equal(generated.exportDir, path.join(cwd, "stackedge-vercel"));
+  assert.ok(fs.existsSync(path.join(generated.exportDir, "config.json")));
+  assert.ok(fs.existsSync(path.join(generated.exportDir, "api", "gateway.js")));
+});
+
 test("stackedge FRPC forwards through the generated FRPS gateway", async t => {
   const backend = http.createServer((req, res) => {
     const chunks = [];
