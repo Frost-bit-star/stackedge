@@ -1,0 +1,7 @@
+{
+  "serviceId": "svc_replace_me",
+  "token": "replace_me",
+  "application": "myapp",
+  "protocol": 1,
+  "maxBodySize": 16777216
+}

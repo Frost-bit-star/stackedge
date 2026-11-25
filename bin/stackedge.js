@@ -25,6 +25,18 @@ const { ensureTorInstalled } = require("../lib/tor/install");
 const { LOG_DIR } = require("../lib/config");
 const { ensureProxy } = require("../lib/security/manager");
 const {
+  vercelInit,
+  vercelDeploy,
+  vercelConnect,
+  vercelDisconnect,
+  vercelReconnect,
+  vercelStatus,
+  vercelProbe,
+  vercelLogs,
+  vercelRemove
+} = require("../lib/commands/vercel");
+const { runTunnel, resurrectTunnels } = require("../lib/vercel/manager");
+const {
   securityStatus,
   setEnabled,
   securityAudit,
@@ -52,6 +64,7 @@ program
   .option("-p, --port <port>", "port your app listens on (default: auto-detected)")
   .option("--ssl-port <port>", "SSL/TLS port your app listens on (optional)")
   .option("--host <host>", "address the app listens on (default: 127.0.0.1)")
+  .option("--vercel", "generate a Vercel FRPS deployment for this app")
   .action(async (name, opts) => {
     const idx = process.argv.indexOf("--");
     if (idx === -1) {
@@ -147,6 +160,14 @@ program
       process.exit(1);
     }
 
+    if (opts.vercel) {
+      try {
+        await vercelInit(name);
+      } catch (err) {
+        console.log(`Vercel setup skipped: ${err.message}`);
+      }
+    }
+
     const tor = ensureTorInstalled();
     if (tor.ok) {
       try {
@@ -196,7 +217,16 @@ program
   .command("onion [name]")
   .description("print the complete onion URL of an app (or all apps)")
   .action(onionCommand);
-program.command("resurrect").description("restore all apps (after reboot / Termux restart)").action(resurrect);
+program
+  .command("resurrect")
+  .description("restore all apps (after reboot / Termux restart)")
+  .action(async () => {
+    await resurrect();
+    const tunnels = resurrectTunnels();
+    if (tunnels.length) {
+      console.log(`Restored ${tunnels.length} Vercel tunnel${tunnels.length === 1 ? "" : "s"}.`);
+    }
+  });
 program
   .command("logs <name>")
   .description("show recent logs for an app")
@@ -226,6 +256,31 @@ security
 security.command("rules").description("show active security rules").action(securityRules);
 security.command("reset").description("restore the default security configuration").action(securityReset);
 
+const vercel = program
+  .command("vercel")
+  .description("publish apps through their own Vercel FRPS deployment");
+
+vercel.command("init <name>").description("generate a Vercel deployment project").option("--force", "replace an existing deployment").action(vercelInit);
+vercel.command("deploy <name> <url>").description("save and verify a deployment URL").action(vercelDeploy);
+vercel.command("probe <name>").description("verify deployment identity, WebSocket and routing").action(vercelProbe);
+vercel
+  .command("connect <name>")
+  .description("start the outbound FRPC tunnel")
+  .option("--foreground", "run in the foreground instead of detaching")
+  .action((name, opts) => vercelConnect(name, opts));
+vercel.command("disconnect <name>").description("stop the FRPC tunnel").action(vercelDisconnect);
+vercel.command("reconnect <name>").description("restart the FRPC tunnel").action(vercelReconnect);
+vercel
+  .command("status [name]")
+  .description("show Vercel deployments and tunnel status")
+  .action(vercelStatus);
+vercel
+  .command("logs <name>")
+  .description("show tunnel logs")
+  .option("-n, --lines <n>", "number of trailing lines", "100")
+  .action((name, opts) => vercelLogs(name, parseInt(opts.lines, 10) || 100));
+vercel.command("remove <name>").description("remove a Vercel deployment").action(vercelRemove);
+
 program
   .command("setup")
   .description("one-shot server setup: install Tor (if missing) + start apps on boot")
@@ -240,8 +295,15 @@ program
     console.log("\nDone. Host something with: stackedge start <name> -- <cmd>");
   });
 
-if (process.argv.length <= 2) {
-  program.help();
+if (process.argv[2] === "__frpc") {
+  if (!process.argv[3]) {
+    console.log("Usage: stackedge __frpc <name>");
+    process.exit(1);
+  }
+  runTunnel(process.argv[3]);
+} else {
+  if (process.argv.length <= 2) {
+    program.help();
+  }
+  program.parse(process.argv);
 }
-
-program.parse(process.argv);

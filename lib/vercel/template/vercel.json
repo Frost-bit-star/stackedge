@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "/_health", "dest": "/api/gateway.js" },
+    { "src": "/_verify", "dest": "/api/gateway.js" },
+    { "src": "/_frpc", "dest": "/api/gateway.js" },
+    { "src": "/(.*)", "dest": "/api/gateway.js" }
+  ]
+}

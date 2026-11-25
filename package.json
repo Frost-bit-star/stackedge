@@ -25,12 +25,14 @@
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^11.0.0",
-    "fs-extra": "^11.2.0"
+    "fs-extra": "^11.2.0",
+    "ws": "^8.18.0"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "scripts": {
-    "start": "node bin/stackedge.js"
+    "start": "node bin/stackedge.js",
+    "test": "node --test"
   }
 }

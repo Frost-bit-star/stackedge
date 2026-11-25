@@ -182,6 +182,40 @@ stackedge start lan --host 10.0.0.5 --port 3000 -- npm start
 | `stackedge security logs [-n 100]` | Show recent security events |
 | `stackedge security rules` | Show active security rules |
 | `stackedge security reset` | Restore the default security configuration |
+| `stackedge start <name> --vercel -- <cmd>` | Start an app and generate its Vercel deployment |
+| `stackedge vercel init <name>` | Generate a unique Vercel FRPS project and credentials |
+| `stackedge vercel deploy <name> <url>` | Save the Vercel URL for the generated deployment |
+| `stackedge vercel probe <name>` | Verify deployment identity, auth, WebSocket and routing |
+| `stackedge vercel connect <name>` | Start the outbound FRPC tunnel in the background |
+| `stackedge vercel disconnect <name>` | Stop the tunnel |
+| `stackedge vercel reconnect <name>` | Restart the tunnel |
+| `stackedge vercel status [name]` | Show deployments and tunnel state |
+| `stackedge vercel logs <name> [-n 100]` | Show tunnel logs |
+| `stackedge vercel remove <name>` | Remove a Vercel deployment |
+
+---
+
+### Vercel publishing
+
+Stackedge generates one FRPS deployment per app. The generated project lives in
+`~/.stackedge/vercel/<app>/project` and is deployed to Vercel; the FRPC client stays inside
+this CLI and dials the deployment outbound through the local Stackedge security proxy.
+The generated `config.json` carries the service ID and token, so Hobby deployments work
+without setting Vercel environment variables. Keep the generated project private because
+that file contains a live bearer token. No Redis, database, VPS or incoming device port
+is required.
+
+```sh
+stackedge start myapp --port 3000 --vercel -- npm start
+# deploy ~/.stackedge/vercel/myapp/project to Vercel
+stackedge vercel deploy myapp https://myapp.vercel.app
+stackedge vercel probe myapp
+stackedge vercel connect myapp
+```
+
+Always run `stackedge vercel probe <app>` before relying on the deployment. Vercel Functions
+are isolated; if the probe reports `cross-instance` routing, the deployment cannot relay public
+requests transparently. Use the generated `server.js` on a long-lived Node runtime instead.
 
 ---
 

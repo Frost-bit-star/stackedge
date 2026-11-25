@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>stackedge powered by frost-bit-star | {{ERROR_CODE}}: {{ERROR_TITLE}}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #404040;
+      -webkit-font-smoothing: antialiased;
+    }
+    .font-mono-ray {
+      font-family: 'Source Code Pro', monospace;
+    }
+  </style>
+</head>
+<body class="bg-white m-0 p-0">
+  <div class="w-full">
+    <header class="max-w-[960px] mx-auto px-6 pt-12 pb-8">
+      <div class="flex flex-wrap items-baseline gap-x-3">
+        <h1 class="text-[48px] leading-[1.1] font-light text-[#404040] tracking-[-0.02em]">
+          Error {{ERROR_CODE}}
+        </h1>
+        <span class="font-mono-ray text-[13px] text-[#777777] tracking-normal">
+          Ray ID: {{RAY_ID}} &bull; {{TIMESTAMP}} UTC
+        </span>
+      </div>
+      <p class="text-[24px] leading-[1.3] font-light text-[#999999] mt-1.5">
+        {{ERROR_TITLE}}
+      </p>
+    </header>
+
+    <section class="w-full bg-[#ebebeb] border-t border-b border-[#dcdcdc] relative">
+      <div class="max-w-[960px] mx-auto px-6 py-11">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-4 text-center items-start">
+          <div class="flex flex-col items-center">
+            <div class="relative w-[100px] h-[74px] flex items-center justify-center mb-3">
+              <svg width="84" height="64" viewBox="0 0 84 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="2" width="80" height="60" rx="5" fill="#999999" />
+                <circle cx="10" cy="10" r="2.5" fill="#ebebeb" />
+                <circle cx="18" cy="10" r="2.5" fill="#ebebeb" />
+                <circle cx="26" cy="10" r="2.5" fill="#ebebeb" />
+                <rect x="8" y="18" width="68" height="38" rx="1" fill="#ebebeb" />
+              </svg>
+              <div class="absolute -bottom-1.5 w-[38px] h-[38px] rounded-full bg-[#9bca3e] flex items-center justify-center shadow-xs">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+            </div>
+            <span class="text-[13px] text-[#777777] mt-2">You</span>
+            <h2 class="text-[21px] font-normal text-[#999999] mt-2 leading-tight">Browser</h2>
+            <span class="text-[19px] font-normal text-[#9bca3e] mt-0.5">Working</span>
+          </div>
+
+          <div class="flex flex-col items-center">
+            <div class="relative w-[136px] h-[74px] flex items-center justify-center mb-3">
+              <svg width="132" height="68" viewBox="0 0 132 68" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M106.5 62H23.5C12.7304 62 4 53.2696 4 42.5C4 32.517 11.5037 24.287 21.1835 23.137C24.8531 11.4646 35.7582 3 48.6 3C60.7517 3 71.1322 10.5844 75.2913 21.2815C77.7219 20.1391 80.4368 19.5 83.3 19.5C93.2712 19.5 101.448 27.2435 102.063 37.0589C103.479 36.6939 104.966 36.5 106.5 36.5C116.165 36.5 124 44.335 124 54C124 58.4183 116.165 62 106.5 62Z" fill="#999999"/>
+                <rect x="18" y="36" width="92" height="26" rx="13" fill="#999999"/>
+              </svg>
+              <div class="absolute -bottom-1.5 w-[38px] h-[38px] rounded-full bg-[#9bca3e] flex items-center justify-center shadow-xs">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+            </div>
+            <span class="text-[13px] text-[#777777] mt-2">EDGE: {{EDGE}}</span>
+            <h2 class="text-[21px] font-normal text-[#999999] mt-2 leading-tight">Stackedge</h2>
+            <span class="text-[19px] font-normal text-[#9bca3e] mt-0.5">Working</span>
+          </div>
+
+          <div class="flex flex-col items-center relative">
+            <div class="relative w-[100px] h-[74px] flex items-center justify-center mb-3">
+              <svg width="84" height="64" viewBox="0 0 84 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 6C13.3 3.5 15.8 2 18.6 2H65.4C68.2 2 70.7 3.5 72 6L81.5 29H2.5L12 6Z" fill="#999999"/>
+                <rect x="2" y="29" width="80" height="28" rx="4" fill="#999999"/>
+                <circle cx="15" cy="43" r="3.5" fill="#ebebeb"/>
+                <circle cx="69" cy="43" r="3.5" fill="#ebebeb"/>
+              </svg>
+              <div class="absolute -bottom-1.5 w-[38px] h-[38px] rounded-full bg-[#bd2426] flex items-center justify-center shadow-xs">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </div>
+            </div>
+            <span class="text-[13px] text-[#777777] mt-2">{{HOST}}</span>
+            <h2 class="text-[21px] font-normal text-[#999999] mt-2 leading-tight">Host</h2>
+            <span class="text-[19px] font-normal text-[#bd2426] mt-0.5">Error</span>
+            <div class="hidden md:block absolute -bottom-[45px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[14px] border-l-transparent border-r-[14px] border-r-transparent border-b-[14px] border-b-[#dcdcdc]">
+              <div class="relative -left-[13px] top-[1.5px] w-0 h-0 border-l-[13px] border-l-transparent border-r-[13px] border-r-transparent border-b-[13px] border-b-white"></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <main class="max-w-[960px] mx-auto px-6 pt-12 pb-14">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+        <div>
+          <h3 class="text-[26px] font-light text-[#404040] mb-4">
+            What happened?
+          </h3>
+          <p class="text-[14.5px] leading-[1.6] text-[#555555]">
+            {{MESSAGE}}
+          </p>
+        </div>
+
+        <div>
+          <h3 class="text-[26px] font-light text-[#404040] mb-4">
+            What can I do?
+          </h3>
+
+          <div class="mb-5">
+            <h4 class="text-[14.5px] font-semibold text-[#404040] mb-1.5">
+              If you're a visitor of this website:
+            </h4>
+            <p class="text-[14.5px] leading-[1.6] text-[#555555]">
+              Please try again in a few minutes.
+            </p>
+          </div>
+
+          <div>
+            <h4 class="text-[14.5px] font-semibold text-[#404040] mb-1.5">
+              If you're the owner of this website:
+            </h4>
+            <p class="text-[14.5px] leading-[1.6] text-[#555555]">
+              Make sure the app is running and its Stackedge tunnel is connected with <code class="font-mono-ray">stackedge vercel connect &lt;app&gt;</code>. If the problem continues, report an issue or open a pull request at
+              <a href="https://github.com/Frost-bit-star/stackedge" class="text-[#2f7bbf] hover:underline">Frost-bit-star/stackedge</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="max-w-[960px] mx-auto px-6 pb-12">
+      <div class="border-t border-[#ebebeb] pt-7 text-center text-[12.5px] text-[#777777]">
+        <span>Stackedge Ray ID: <strong class="font-semibold text-[#555555]">{{RAY_ID}}</strong></span>
+        <span class="mx-1.5">&bull;</span>
+        <span>Your IP: {{CLIENT_IP}}</span>
+        <span class="mx-1.5">&bull;</span>
+        <span>Performance &amp; security by <a href="https://github.com/Frost-bit-star/stackedge" class="text-[#2f7bbf] hover:underline">stackedge powered by frost-bit-star</a></span>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
