@@ -1,5 +1,7 @@
 ### Stackedge
 
+**Supports Vercel deployment** · **[Vercel deploy →](https://github.com/Frost-bit-star/stackfrp)**
+
 <div align="center">
   <img 
     src="/Screenshot (4).png" 
@@ -37,6 +39,9 @@ reboot everything comes back on its own.
 - **Built-in Security Engine**: a lightweight Node.js reverse proxy with Nginx-style security
   headers, rate limiting, request limits, method and Host validation, path-traversal blocking,
   access logging and an audit score. Enabled by default, no Nginx required.
+
+- **Vercel deployment**: publish any app through its own Vercel FRPS gateway with
+  `stackedge vercel init`, `deploy`, `probe` and `connect`. No incoming device port is needed.
 
 - CLI similar to pm2: `start`, `stop`, `restart`, `delete`, `list`, `resurrect`, `logs`,
   plus `stackedge security <status|enable|disable|audit|fix|headers|logs|rules|reset>`.
