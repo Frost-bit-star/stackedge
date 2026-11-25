@@ -239,9 +239,14 @@ stackedge start myapp --port 3000 --local -- npm start
 stackedge vercel init myapp
 ```
 
-Always run `stackedge vercel probe <app>` before relying on the deployment. Vercel Functions
-are isolated; if the probe reports `cross-instance` routing, the deployment cannot relay public
-requests transparently. Use the generated `server.js` on a long-lived Node runtime instead.
+The generated `api/gateway.js` exports a Node HTTP server, so Vercel can accept `/_frpc`
+WebSocket upgrades with Fluid compute. FRPC reconnects when Vercel closes a connection at the
+function duration limit.
+
+Always run `stackedge vercel probe <app>` before relying on the deployment. Public HTTP requests
+are not guaranteed to reach the instance holding the in-memory tunnel. If the probe reports
+`cross-instance` routing, use the generated `server.js` on a long-lived Node runtime, or add a
+shared store so every instance can reach the tunnel state.
 
 ---
 

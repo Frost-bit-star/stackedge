@@ -19,4 +19,6 @@ When the app is offline or a relay error occurs, the gateway returns the branded
 
 ## Runtime check
 
-Run `stackedge vercel probe <app>` on the user's machine after deployment. Vercel functions are isolated; an in-memory tunnel is visible only to the instance holding it. If the probe reports cross-instance routing, this deployment cannot transparently relay public requests. Deploy `server.js` to a long-lived Node runtime instead, or use a Vercel-supported persistent transport.
+`api/gateway.js` exports a Node HTTP server so Vercel can accept `/_frpc` WebSocket upgrades with Fluid compute. FRPC reconnects when Vercel closes a connection at the function duration limit.
+
+Run `stackedge vercel probe <app>` on the user's machine after deployment. Public HTTP requests are not guaranteed to reach the instance holding the in-memory tunnel. If the probe reports cross-instance routing, deploy `server.js` to a long-lived Node runtime or add a shared store for tunnel state.
