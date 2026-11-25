@@ -106,8 +106,9 @@ Debian:  sudo apt install php golang python3 -y
 npm install -g stackedge
 ```
 
-Then run the one-shot setup. On a server this installs Tor (if missing) and registers boot
-integration so your apps come back after a reboot:
+If you plan to publish through Tor, run the one-shot setup. It installs Tor if missing and
+registers boot integration so your apps come back after a reboot. Vercel-only and local apps do
+not need Tor:
 
 ```
 stackedge setup
@@ -140,6 +141,8 @@ stackedge start blog --tor -- npm start
 - `blog` is the app name.
 - Everything after `--` is the command used to start the app.
 - Pick `--tor`, `--vercel`, `--tor --vercel`, or `--local`. With no provider flag, Stackedge asks interactively.
+- `--tor` publishes an onion service; `--vercel` publishes through the generated FRPS gateway; `--tor --vercel` keeps both; `--local` disables Tor and public publishing.
+- `--local` cannot be combined with `--tor` or `--vercel`. Older apps without provider data default to Tor for compatibility.
 
 Output:
 
@@ -148,6 +151,9 @@ Output:
   logs: /home/you/.stackedge/logs/blog.log
 🌐 http://generated-onion-address.onion
 ```
+
+The onion URL is printed only for apps with Tor enabled. Vercel-only apps print the generated
+deployment path instead, and local-only apps print `Tor disabled`.
 
 #### Any port
 
@@ -184,14 +190,14 @@ stackedge start lan --host 10.0.0.5 --port 3000 --tor -- npm start
 | `stackedge start <name> [--port <n>] [--ssl-port <n>] [--host <ip>] [--tor] [--vercel] [--local] -- <cmd>` | Start an app with a chosen hosting provider |
 | `stackedge stop <name>` | Stop an app (kills its whole process group) |
 | `stackedge restart <name>` | Restart an app on the same ports |
-| `stackedge delete <name>` | Remove an app and its onion service |
+| `stackedge delete <name>` | Remove an app; updates Tor config only for Tor apps |
 | `stackedge list` | Table of apps, states, ports and onion URLs |
 | `stackedge list --full` | Same, plain text, never truncated (easy to copy) |
 | `stackedge onion [name]` | Print the complete onion URL of one app (or all) |
-| `stackedge resurrect` | Restore every app (after a reboot or network drop) |
+| `stackedge resurrect` | Restore app processes, Tor onion services, and Vercel FRPC tunnels |
 | `stackedge logs <name> [-n 100]` | Show recent app logs |
 | `stackedge daemon <install\|uninstall\|status>` | Manage boot integration |
-| `stackedge setup` | Install Tor if missing + install boot integration |
+| `stackedge setup` | Install Tor if missing + install boot integration (for Tor apps) |
 | `stackedge security status` | Show engine state, config path and score |
 | `stackedge security enable` / `disable` | Turn the security engine on or off |
 | `stackedge security audit` | Run configuration checks and print a score |
@@ -216,8 +222,11 @@ stackedge start lan --host 10.0.0.5 --port 3000 --tor -- npm start
 ### Vercel publishing
 
 Stackedge generates one FRPS deployment per app. In `--vercel` mode, Tor is not installed and
-not started. The generated project is copied to `<your-project>/stackedge-vercel` so it is easy
-to deploy from the app root; the CLI keeps its own copy in `~/.stackedge/vercel/<app>/project`.
+not started; the app's `torState` becomes `disabled` and any old onion URL is cleared. Use
+`--tor --vercel` when you want both publishing paths, or run `stackedge vercel init <app>` on an
+existing Tor app to add Vercel without disabling Tor. The generated project is copied to
+`<your-project>/stackedge-vercel` so it is easy to deploy from the app root; the CLI keeps its own
+copy in `~/.stackedge/vercel/<app>/project`.
 The FRPC client stays inside this CLI and dials the deployment outbound through the local
 Stackedge security proxy.
 The generated `config.json` carries the service ID and token, so Hobby deployments work
@@ -287,6 +296,10 @@ Trade-offs:
 Remove it again with `stackedge daemon uninstall` (your apps and data stay untouched) and
 inspect it with `stackedge daemon status`.
 
+On boot, `stackedge resurrect` restarts every app process. It publishes onion services only for
+apps with Tor enabled and restarts FRPC workers only for Vercel deployments that have a saved URL.
+Local-only apps restart without Tor or FRPC.
+
 **Termux auto-resurrect by hand** (same thing the shell hook does):
 
 ```
@@ -309,6 +322,9 @@ All settings are optional environment variables - nothing is hardcoded to one ma
 | `STACKEDGE_BOOTSTRAP_TIMEOUT` | `180000` | How long to wait for Tor (ms) |
 | `PORT` / `SSL_PORT` | auto | Default ports for the next `start` |
 
+The Tor variables apply only to apps with Tor enabled. Vercel-only and local-only apps ignore
+them and do not start or install Tor during `stackedge start`.
+
 Example on a VPS where another Tor already owns 9051:
 
 ```
@@ -320,22 +336,23 @@ stackedge start blog -- npm start
 
 ### Security Engine
 
-Stackedge puts a lightweight HTTP security proxy between Tor and your app. No Nginx install,
-no extra system packages - the proxy is plain Node.js, so it works on Termux, Linux, VPS and
-macOS.
+Stackedge puts a lightweight HTTP security proxy in front of your app for both Tor onion
+traffic and Vercel FRPC traffic. No Nginx install, no extra system packages - the proxy is plain
+Node.js, so it works on Termux, Linux, VPS and macOS.
 
 ```
-Tor network -> onion service -> Stackedge Security Engine -> application port
-                                   |  rate limit / host + method + path checks
-                                   |  body + header limits / timeouts
-                                   |  security headers / access log
+Tor network -> onion service --\
+                                -> Stackedge Security Engine -> application port
+Vercel FRPC -> HTTP request ---/      |  rate limit / host + method + path checks
+                                      |  body + header limits / timeouts
+                                      |  security headers / access log
 ```
 
 When security is enabled (the default), `stackedge start` allocates a loopback-only proxy
-port for the app, starts the proxy as a detached process and points `HiddenServicePort 80`
-at the proxy instead of the application. The app itself keeps listening on `127.0.0.1`;
-Tor never gets a direct route to the backend port. `stop`, `restart`, `delete` and
-`resurrect` manage the proxy along with the app.
+port for the app and starts the proxy as a detached process. Tor's `HiddenServicePort 80` and
+the Vercel FRPC target both point at that proxy instead of the application. The app itself keeps
+listening on `127.0.0.1`; public traffic never gets a direct route to the backend port. `stop`,
+`restart`, `delete` and `resurrect` manage the proxy along with the app.
 
 Edit `~/.stackedge/security.json` (created with defaults on first write). All fields are
 optional and are merged with the defaults:
