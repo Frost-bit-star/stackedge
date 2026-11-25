@@ -15,6 +15,8 @@ Environment variables still override `config.json`:
 
 Keep this project private: `config.json` contains a live bearer token.
 
+If config is missing, `server.js` stays up and returns the branded error page listing the missing service ID and token.
+
 When the app is offline or a relay error occurs, the gateway returns the branded Stackedge error page from `errorpagetempdesign.html`. The page directs visitors to retry and directs owners to report issues or open pull requests at https://github.com/Frost-bit-star/stackedge.
 
 ## Runtime check
