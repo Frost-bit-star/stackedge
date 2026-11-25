@@ -3,6 +3,18 @@
 **Supports Vercel deployment** · **[Vercel deploy →](https://github.com/Frost-bit-star/stackfrp)**
 
 <div align="center">
+
+[![Stackedge](https://img.shields.io/badge/Stackedge-Tor%20%2B%20Vercel-6f42c1?logo=github)](https://github.com/Frost-bit-star/stackedge)
+[![Vercel](https://img.shields.io/badge/Vercel-deploy-000000?logo=vercel&logoColor=white)](https://github.com/Frost-bit-star/stackfrp)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Security](https://img.shields.io/badge/security-enabled-green)](https://github.com/Frost-bit-star/stackedge#built-in-security-engine)
+[![Issues](https://img.shields.io/badge/issues-stackedge-blue?logo=github)](https://github.com/Frost-bit-star/stackedge/issues)
+[![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/Frost-bit-star/stackedge/pulls)
+[![License](https://img.shields.io/badge/license-MIT-green)](https://github.com/Frost-bit-star/stackedge/blob/main/package.json)
+
+</div>
+
+<div align="center">
   <img 
     src="/Screenshot (4).png" 
     alt="Desktop View of Hosted Website" 
